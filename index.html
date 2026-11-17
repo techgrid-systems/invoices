@@ -115,13 +115,13 @@
                     </span>
                 </div>
 
-                <!-- FormSubmit Form -->
+                <!-- FormSubmit Form hardcoded to adamryanayliffe@gmail.com for single activation -->
                 <form id="techgrid-invoice-form" action="https://formsubmit.co/adamryanayliffe@gmail.com" method="POST" class="p-6 space-y-6">
                     <!-- Hidden FormSubmit Configuration Inputs -->
                     <input type="hidden" name="_subject" id="fs-subject" value="New Invoice from TechGrid Systems">
                     <input type="hidden" name="_template" value="table">
                     <input type="hidden" name="_captcha" value="false">
-                    <input type="hidden" name="_cc" id="fs-cc" value="">
+                    <input type="hidden" name="_autoresponse" id="fs-autoresponse" value="">
                     <!-- Compiled summary fields for clean email formatting -->
                     <input type="hidden" name="Issuer" value="TechGrid Systems">
                     <input type="hidden" name="Line_Items_Summary" id="fs-line-items">
@@ -164,12 +164,13 @@
                             </div>
                             <div>
                                 <label class="block text-xs font-semibold text-cyan-700 mb-1.5">
-                                    Client Recipient Email (Auto-Delivered via CC) *
+                                    Client Recipient Email *
                                 </label>
                                 <div class="relative">
                                     <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center text-slate-400">
                                         <i class="fa-solid fa-envelope"></i>
                                     </span>
+                                    <!-- name="email" tells FormSubmit where to send the _autoresponse directly -->
                                     <input type="email" id="client-email" name="email" placeholder="billing@clientdomain.com" required
                                         class="w-full pl-10 pr-3.5 py-2.5 bg-cyan-50/40 border border-cyan-300 rounded-xl text-sm font-medium focus:ring-2 focus:ring-cyan-500 focus:border-cyan-500 outline-none transition">
                                 </div>
@@ -280,7 +281,7 @@
                             </div>
                             <div class="text-right">
                                 <span class="text-2xl font-bold tracking-tight text-cyan-400">INVOICE</span>
-                                <p id="prev-inv-num" class="font-mono text-xs text-slate-300 mt-1">#TGS-2026-001</p>
+                                <p id="prev-inv-num" class="font-mono text-xs text-slate-300 mt-1">#TGS-INV-001</p>
                             </div>
                         </div>
                     </div>
@@ -364,7 +365,11 @@
     </footer>
 
     <script>
-        // State management for invoice line items
+        // Hardcoded single FormSubmit activation endpoint
+        const ACTIVATION_EMAIL = 'adamryanayliffe@gmail.com';
+
+        // State management for invoice line items & sequential counter
+        let invoiceSequence = 1;
         let lineItems = [
             { id: 1, description: 'Managed Cloud Infrastructure & Kubernetes Cluster', qty: 1, price: 1450.00 },
             { id: 2, description: '24/7 Zero-Trust Security & SOC Monitoring', qty: 1, price: 650.00 }
@@ -377,25 +382,18 @@
         const currencySelect = document.getElementById('currency-select');
         const taxRateInput = document.getElementById('tax-rate');
 
+        // Format sequential invoice number (e.g., TGS-INV-001)
+        function formatInvoiceNumber(seq) {
+            return `TGS-INV-${String(seq).padStart(3, '0')}`;
+        }
+
         // Initialize dates and invoice number on load
         window.addEventListener('DOMContentLoaded', () => {
             initializeDefaults();
-            loadSavedPrimaryEmail();
             renderLineItems();
             updateCalculationsAndPreview();
             attachLiveListeners();
         });
-
-        // Persist the user's single activated email in localStorage for convenience
-        function loadSavedPrimaryEmail() {
-            const saved = localStorage.getItem('techgrid_activated_email');
-            if (saved) {
-                document.getElementById('primary-activated-email').value = saved;
-            }
-            document.getElementById('primary-activated-email').addEventListener('input', (e) => {
-                localStorage.setItem('techgrid_activated_email', e.target.value.trim());
-            });
-        }
 
         function initializeDefaults() {
             const today = new Date();
@@ -406,36 +404,57 @@
             document.getElementById('issue-date').value = formatDate(today);
             document.getElementById('due-date').value = formatDate(due);
 
-            // Generate a realistic TechGrid invoice number
-            const randomDigits = Math.floor(1000 + Math.random() * 9000);
-            document.getElementById('invoice-number').value = `TGS-${today.getFullYear()}-${randomDigits}`;
+            // Set sequential TechGrid invoice number starting from TGS-INV-001
+            document.getElementById('invoice-number').value = formatInvoiceNumber(invoiceSequence);
         }
 
-        // Render editable line items in the form
+        // Attach input listeners for real-time preview syncing
+        function attachLiveListeners() {
+            const fields = [
+                'invoice-number', 'issue-date', 'due-date',
+                'client-name', 'client-email', 'client-address',
+                'invoice-notes', 'tax-rate', 'currency-select'
+            ];
+            fields.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) {
+                    el.addEventListener('input', updateCalculationsAndPreview);
+                    el.addEventListener('change', updateCalculationsAndPreview);
+                }
+            });
+        }
+
+        // Render editable line item rows
         function renderLineItems() {
             lineItemsContainer.innerHTML = '';
-            lineItems.forEach((item, index) => {
+            lineItems.forEach((item) => {
                 const row = document.createElement('div');
                 row.className = 'grid grid-cols-12 gap-2 items-center bg-slate-50 p-2.5 rounded-xl border border-slate-200';
                 row.innerHTML = `
                     <div class="col-span-12 sm:col-span-6">
-                        <input type="text" placeholder="Service or hardware description" value="${escapeHtml(item.description)}"
-                            oninput="updateItem(${item.id}, 'description', this.value)" required
-                            class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-cyan-500 outline-none">
+                        <input type="text" placeholder="Service or product description" value="${escapeHtml(item.description)}"
+                            onchange="updateItem(${item.id}, 'description', this.value)"
+                            oninput="updateItem(${item.id}, 'description', this.value)"
+                            required
+                            class="w-full px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs sm:text-sm focus:ring-2 focus:ring-cyan-500 outline-none">
                     </div>
                     <div class="col-span-4 sm:col-span-2">
                         <input type="number" min="1" step="1" placeholder="Qty" value="${item.qty}"
-                            oninput="updateItem(${item.id}, 'qty', parseFloat(this.value) || 0)" required
-                            class="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono text-center focus:ring-2 focus:ring-cyan-500 outline-none">
+                            onchange="updateItem(${item.id}, 'qty', parseFloat(this.value) || 0)"
+                            oninput="updateItem(${item.id}, 'qty', parseFloat(this.value) || 0)"
+                            required
+                            class="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-xs sm:text-sm font-mono text-center focus:ring-2 focus:ring-cyan-500 outline-none">
                     </div>
                     <div class="col-span-6 sm:col-span-3">
                         <input type="number" min="0" step="0.01" placeholder="Unit Price" value="${item.price}"
-                            oninput="updateItem(${item.id}, 'price', parseFloat(this.value) || 0)" required
-                            class="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-xs font-mono text-right focus:ring-2 focus:ring-cyan-500 outline-none">
+                            onchange="updateItem(${item.id}, 'price', parseFloat(this.value) || 0)"
+                            oninput="updateItem(${item.id}, 'price', parseFloat(this.value) || 0)"
+                            required
+                            class="w-full px-2.5 py-2 bg-white border border-slate-300 rounded-lg text-xs sm:text-sm font-mono text-right focus:ring-2 focus:ring-cyan-500 outline-none">
                     </div>
                     <div class="col-span-2 sm:col-span-1 flex justify-end">
                         <button type="button" onclick="removeLineItem(${item.id})" title="Remove item"
-                            class="p-2 text-slate-400 hover:text-rose-600 transition ${lineItems.length === 1 ? 'opacity-30 cursor-not-allowed' : ''}"
+                            class="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition ${lineItems.length === 1 ? 'opacity-30 cursor-not-allowed' : ''}"
                             ${lineItems.length === 1 ? 'disabled' : ''}>
                             <i class="fa-solid fa-trash-can text-xs"></i>
                         </button>
@@ -446,7 +465,7 @@
         }
 
         function addLineItem() {
-            lineItems.push({ id: nextItemId++, description: '', qty: 1, price: 0 });
+            lineItems.push({ id: nextItemId++, description: '', qty: 1, price: 0.00 });
             renderLineItems();
             updateCalculationsAndPreview();
         }
@@ -466,15 +485,7 @@
             }
         }
 
-        // Attach listeners to all metadata inputs for live preview syncing
-        function attachLiveListeners() {
-            const ids = ['invoice-number', 'issue-date', 'due-date', 'client-name', 'client-email', 'client-address', 'invoice-notes', 'tax-rate', 'currency-select'];
-            ids.forEach(id => {
-                document.getElementById(id).addEventListener('input', updateCalculationsAndPreview);
-            });
-        }
-
-        // Update calculations, hidden FormSubmit inputs, and the live preview card
+        // Recalculate totals, sync live preview, and update FormSubmit hidden payload fields
         function updateCalculationsAndPreview() {
             const currency = currencySelect.value;
             const taxRate = parseFloat(taxRateInput.value) || 0;
@@ -485,21 +496,21 @@
 
             let summaryLines = [];
 
-            lineItems.forEach((item, idx) => {
-                const lineTotal = item.qty * item.price;
+            lineItems.forEach(item => {
+                const lineTotal = (item.qty || 0) * (item.price || 0);
                 subtotal += lineTotal;
 
-                // Update preview table
+                // Update preview table row
                 const tr = document.createElement('tr');
                 tr.innerHTML = `
-                    <td class="py-2.5 px-3 text-slate-800 font-medium">${escapeHtml(item.description || 'Untitled Service')}</td>
-                    <td class="py-2.5 px-2 text-center font-mono text-slate-600">${item.qty}</td>
-                    <td class="py-2.5 px-3 text-right font-mono font-medium text-slate-900">${currency}${lineTotal.toFixed(2)}</td>
+                    <td class="py-2.5 px-3 text-slate-700 font-medium">${escapeHtml(item.description || 'Untitled Service')}</td>
+                    <td class="py-2.5 px-2 text-center font-mono text-slate-500">${item.qty || 0}</td>
+                    <td class="py-2.5 px-3 text-right font-mono font-semibold text-slate-800">${currency}${lineTotal.toFixed(2)}</td>
                 `;
                 prevBody.appendChild(tr);
 
-                // Build plain-text line item summary for FormSubmit email payload
-                summaryLines.push(`${idx + 1}. ${item.description || 'Service'} (Qty: ${item.qty} x ${currency}${item.price.toFixed(2)}) = ${currency}${lineTotal.toFixed(2)}`);
+                // Build clean text line for FormSubmit email body
+                summaryLines.push(`• ${item.description || 'Service'} (Qty: ${item.qty} x ${currency}${(item.price || 0).toFixed(2)}) = ${currency}${lineTotal.toFixed(2)}`);
             });
 
             const taxAmount = subtotal * (taxRate / 100);
@@ -510,8 +521,8 @@
             document.getElementById('form-tax').textContent = `${currency}${taxAmount.toFixed(2)}`;
             document.getElementById('form-total').textContent = `${currency}${totalDue.toFixed(2)}`;
 
-            // Update Preview Metadata & Totals
-            const invNum = document.getElementById('invoice-number').value || 'TGS-DRAFT';
+            // Update Live Preview Metadata & Totals
+            const invNum = document.getElementById('invoice-number').value || formatInvoiceNumber(invoiceSequence);
             const clientName = document.getElementById('client-name').value || 'Client Company Name';
             const clientEmail = document.getElementById('client-email').value || 'recipient@client.com';
             const clientAddress = document.getElementById('client-address').value || 'Client Billing Address';
@@ -532,29 +543,52 @@
             document.getElementById('prev-tax').textContent = `${currency}${taxAmount.toFixed(2)}`;
             document.getElementById('prev-total').textContent = `${currency}${totalDue.toFixed(2)}`;
 
-            // Sync hidden FormSubmit fields
-            document.getElementById('fs-subject').value = `Invoice ${invNum} from TechGrid Systems (${currency}${totalDue.toFixed(2)})`;
-            document.getElementById('fs-cc').value = document.getElementById('client-email').value.trim();
-            document.getElementById('fs-line-items').value = summaryLines.join(' | ');
+            // Update FormSubmit Hidden Inputs
+            document.getElementById('fs-subject').value = `TechGrid Systems Invoice ${invNum} — ${clientName} (${currency}${totalDue.toFixed(2)})`;
+            document.getElementById('fs-line-items').value = summaryLines.join('\n');
             document.getElementById('fs-subtotal').value = `${currency}${subtotal.toFixed(2)}`;
             document.getElementById('fs-tax').value = `${currency}${taxAmount.toFixed(2)} (${taxRate}%)`;
             document.getElementById('fs-total').value = `${currency}${totalDue.toFixed(2)}`;
+
+            // Build formatted autoresponse invoice delivered straight to Client Recipient Email
+            const autoresponseText = [
+                `TECHGRID SYSTEMS — OFFICIAL INVOICE (${invNum})`,
+                `====================================================`,
+                `Billed To: ${clientName}`,
+                `Billing Address: ${clientAddress}`,
+                `Issue Date: ${issueDate}`,
+                `Due Date: ${dueDate}`,
+                ``,
+                `SERVICES & LINE ITEMS:`,
+                ...summaryLines,
+                ``,
+                `----------------------------------------------------`,
+                `Subtotal: ${currency}${subtotal.toFixed(2)}`,
+                `VAT / Tax (${taxRate}%): ${currency}${taxAmount.toFixed(2)}`,
+                `TOTAL DUE: ${currency}${totalDue.toFixed(2)}`,
+                `----------------------------------------------------`,
+                ``,
+                `PAYMENT TERMS & REMITTANCE:`,
+                `${notes}`,
+                ``,
+                `Thank you for your business,`,
+                `TechGrid Systems Ltd | billing@techgridsystems.io`
+            ].join('\n');
+
+            document.getElementById('fs-autoresponse').value = autoresponseText;
         }
 
-        // Hardcoded single FormSubmit activation email
-        const ACTIVATION_EMAIL = 'adamryanayliffe@gmail.com';
-
-        // Handle FormSubmit Dispatch (activates once via adamryanayliffe@gmail.com and CCs the client recipient)
-        form.addEventListener('submit', async function(e) {
+        // Handle Form Submission via FormSubmit AJAX API to hardcoded activation endpoint
+        form.addEventListener('submit', async function (e) {
             e.preventDefault();
-            const recipientEmail = document.getElementById('client-email').value.trim();
 
-            if (!recipientEmail || !recipientEmail.includes('@')) {
-                showToast('Invalid Email', 'Please enter a valid recipient email address to dispatch the invoice.', 'error');
+            const recipientEmail = document.getElementById('client-email').value.trim();
+            if (!recipientEmail) {
+                showToast('Missing Recipient Email', 'Please enter a valid client email address before raising the invoice.', 'error');
                 return;
             }
 
-            // Ensure all hidden fields (including _cc) are synced right before sending
+            // Ensure latest calculations and autoresponse body are synced
             updateCalculationsAndPreview();
 
             const submitBtn = document.getElementById('submit-btn');
@@ -563,48 +597,48 @@
 
             submitBtn.disabled = true;
             submitBtn.classList.add('opacity-75', 'cursor-wait');
-            submitBtnText.textContent = `Dispatching to ${recipientEmail}...`;
+            submitBtnText.textContent = `Sending Invoice to ${recipientEmail}...`;
 
             try {
                 const formData = new FormData(form);
-                const payload = {};
-                formData.forEach((value, key) => {
-                    payload[key] = value;
-                });
+                const ajaxEndpoint = `https://formsubmit.co/ajax/${encodeURIComponent(ACTIVATION_EMAIL)}`;
 
-                const response = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(ACTIVATION_EMAIL)}`, {
+                const response = await fetch(ajaxEndpoint, {
                     method: 'POST',
+                    body: formData,
                     headers: {
-                        'Content-Type': 'application/json',
                         'Accept': 'application/json'
-                    },
-                    body: JSON.stringify(payload)
+                    }
                 });
 
                 const result = await response.json();
 
                 if (response.ok && (result.success === "true" || result.success === true)) {
+                    const dispatchedInvNum = document.getElementById('invoice-number').value;
+
+                    // Increment sequential invoice number for the next invoice
+                    invoiceSequence += 1;
+                    document.getElementById('invoice-number').value = formatInvoiceNumber(invoiceSequence);
+                    updateCalculationsAndPreview();
+
                     showToast(
                         'Invoice Dispatched!',
-                        `Invoice ${document.getElementById('invoice-number').value} was sent to ${recipientEmail}.`,
+                        `Invoice ${dispatchedInvNum} was sent directly to ${recipientEmail}. Next invoice ready: ${formatInvoiceNumber(invoiceSequence)}.`,
                         'success'
                     );
                 } else {
-                    // Fallback to standard POST redirect if first-time activation is required on adamryanayliffe@gmail.com
-                    if (result.message && result.message.toLowerCase().includes('activation')) {
-                        form.action = `https://formsubmit.co/${encodeURIComponent(ACTIVATION_EMAIL)}`;
-                        form.submit();
-                        return;
-                    }
-                    throw new Error(result.message || 'FormSubmit rejected the request.');
+                    throw new Error(result.message || 'FormSubmit requires first-time activation.');
                 }
             } catch (error) {
-                console.error('FormSubmit Error:', error);
+                // Fallback to standard browser POST if first-time activation is needed on adamryanayliffe@gmail.com
                 showToast(
-                    'Dispatch Notice',
-                    `Could not complete send (${error.message}). Please check your connection or verify activation on ${ACTIVATION_EMAIL}.`,
-                    'error'
+                    'Activation / Redirecting...',
+                    `Submitting directly via FormSubmit (${error.message}).`,
+                    'warning'
                 );
+                setTimeout(() => {
+                    form.submit();
+                }, 1200);
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.classList.remove('opacity-75', 'cursor-wait');
@@ -612,7 +646,20 @@
             }
         });
 
-        // Custom Toast Notification Helper
+        // Reset form to clean default state
+        function resetForm() {
+            form.reset();
+            lineItems = [
+                { id: 1, description: 'Managed Cloud Infrastructure & Kubernetes Cluster', qty: 1, price: 1450.00 }
+            ];
+            nextItemId = 2;
+            initializeDefaults();
+            renderLineItems();
+            updateCalculationsAndPreview();
+            showToast('Invoice Reset', 'Form fields have been cleared and reset to defaults.', 'info');
+        }
+
+        // Custom Toast Notification Helper (Replaces alert())
         let toastTimeout;
         function showToast(title, message, type = 'info') {
             const toast = document.getElementById('toast-notification');
@@ -623,12 +670,15 @@
             titleEl.textContent = title;
             msgEl.textContent = message;
 
+            icon.className = 'mt-0.5 text-lg fa-solid ';
             if (type === 'success') {
-                icon.className = 'fa-solid fa-circle-check text-emerald-400 mt-0.5 text-lg';
+                icon.className += 'fa-circle-check text-emerald-400';
             } else if (type === 'error') {
-                icon.className = 'fa-solid fa-triangle-exclamation text-amber-400 mt-0.5 text-lg';
+                icon.className += 'fa-circle-exclamation text-rose-400';
+            } else if (type === 'warning') {
+                icon.className += 'fa-triangle-exclamation text-amber-400';
             } else {
-                icon.className = 'fa-solid fa-circle-info text-cyan-400 mt-0.5 text-lg';
+                icon.className += 'fa-circle-info text-cyan-400';
             }
 
             toast.classList.remove('translate-y-24', 'opacity-0');
@@ -638,15 +688,7 @@
             }, 6000);
         }
 
-        function resetForm() {
-            form.reset();
-            lineItems = [{ id: nextItemId++, description: 'TechGrid Consulting & Systems Engineering', qty: 1, price: 500.00 }];
-            initializeDefaults();
-            renderLineItems();
-            updateCalculationsAndPreview();
-            showToast('Form Reset', 'A fresh TechGrid Systems invoice draft has been prepared.', 'info');
-        }
-
+        // Utility to safely escape HTML strings in live preview
         function escapeHtml(str) {
             return String(str)
                 .replace(/&/g, '&amp;')
